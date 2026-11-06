@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+set -e
+
+# Identify staged markdown files in items/ or tickets/
+STAGED_ITEMS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^(items|tickets)/.*\.md$' || true)
+
+if [ -z "$STAGED_ITEMS" ]; then
+    exit 0
+fi
+
+echo "Validating staged task items..."
+for file in $STAGED_ITEMS; do
+    ./bin/tasksd validate "$file"
+done

@@ -5,12 +5,20 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/alesgaroth/tasksd/internal/core"
+	"github.com/alesgaroth/tasksd/internal/store"
 )
 
 type Server struct {
 	mux       *http.ServeMux
 	templates *template.Template
 	webDir    string
+	store     *store.Store
+}
+
+type PageData struct {
+	Items []core.Item
 }
 
 func findWebDir() string {
@@ -25,6 +33,10 @@ func findWebDir() string {
 }
 
 func NewServer() http.Handler {
+	return NewServerWithRepo(".")
+}
+
+func NewServerWithRepo(repoDir string) http.Handler {
 	webDir := findWebDir()
 	tmplPath := filepath.Join(webDir, "templates", "index.html")
 	tmpl, err := template.ParseFiles(tmplPath)
@@ -37,6 +49,7 @@ func NewServer() http.Handler {
 		mux:       mux,
 		templates: tmpl,
 		webDir:    webDir,
+		store:     store.New(repoDir),
 	}
 
 	staticDir := filepath.Join(webDir, "static")
@@ -53,7 +66,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.templates.Execute(w, nil); err != nil {
+	items, err := s.store.ListItems()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data := PageData{
+		Items: items,
+	}
+	if err := s.templates.Execute(w, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
