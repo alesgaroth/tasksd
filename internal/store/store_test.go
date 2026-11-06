@@ -2,8 +2,11 @@ package store_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/alesgaroth/tasksd/internal/core"
 	"github.com/alesgaroth/tasksd/internal/store"
@@ -134,5 +137,62 @@ status: active
 	_, _, err = store.ValidatePath(filepath.Join(tempDir, "nonexistent"))
 	if err == nil {
 		t.Fatalf("expected error for non-existent path")
+	}
+}
+
+func TestStoreCaptureItem(t *testing.T) {
+	tempDir := t.TempDir()
+
+	cmd := exec.Command("git", "init")
+	cmd.Dir = tempDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %s: %v", string(out), err)
+	}
+
+	s := store.New(tempDir)
+	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
+	item := core.Item{
+		ID:      "T-0001",
+		Title:   "First captured task",
+		Level:   core.LevelTask,
+		Status:  core.StatusInbox,
+		Created: now,
+		Body:    "Some note",
+	}
+
+	if err := s.CaptureItem(item); err != nil {
+		t.Fatalf("failed to capture item: %v", err)
+	}
+
+	filePath := filepath.Join(tempDir, "items", "T-0001.md")
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("failed to read created item: %v", err)
+	}
+
+	parsed, err := core.ParseItem(string(content))
+	if err != nil {
+		t.Fatalf("failed to parse created item: %v", err)
+	}
+	if parsed.ID != item.ID || parsed.Title != item.Title {
+		t.Errorf("parsed item mismatch: got %+v, want %+v", parsed, item)
+	}
+
+	logCmd := exec.Command("git", "log", "-1", "--pretty=%B")
+	logCmd.Dir = tempDir
+	logOut, err := logCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git log failed: %s: %v", string(logOut), err)
+	}
+	if !strings.Contains(string(logOut), "Capture T-0001: First captured task") {
+		t.Errorf("unexpected commit message: %s", string(logOut))
+	}
+
+	nextID, err := s.NextID("T")
+	if err != nil {
+		t.Fatalf("failed to get next ID: %v", err)
+	}
+	if nextID != "T-0002" {
+		t.Errorf("expected next ID T-0002, got %q", nextID)
 	}
 }

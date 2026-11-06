@@ -6,19 +6,44 @@
     <title>tasksd</title>
     <script src="/static/htmx.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 2rem; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 2rem; max-width: 900px; }
         table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
         th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
         th { background-color: #f5f5f5; }
         tr:nth-child(even) { background-color: #fafafa; }
         .empty { color: #666; font-style: italic; margin-top: 1rem; }
+        #capture-section { margin-bottom: 2rem; padding: 1rem; background: #f9f9f9; border-radius: 4px; border: 1px solid #eee; }
+        .form-group { margin-bottom: 0.75rem; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+        .form-group input, .form-group textarea { width: 100%; padding: 6px 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 3px; }
+        button { background-color: #2e69ff; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 600; }
+        button:hover { background-color: #1a53e0; }
     </style>
 </head>
 <body>
     <main id="app">
-        <h1>Hello, tasksd</h1>
-        <h2>Items</h2>
-        {{if .Items}}
+        <h1>tasksd</h1>
+
+        <section id="capture-section">
+            <h2>Capture</h2>
+            <form id="capture-form"
+                  hx-post="/capture"
+                  hx-target="#items-tbody"
+                  hx-swap="afterbegin"
+                  hx-on::after-request="if(event.detail.successful) this.reset()">
+                <div class="form-group">
+                    <label for="title">Task Title</label>
+                    <input type="text" id="title" name="title" required placeholder="What needs doing?" autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="body">Notes (optional)</label>
+                    <textarea id="body" name="body" rows="2" placeholder="Context or notes"></textarea>
+                </div>
+                <button type="submit">Capture</button>
+            </form>
+        </section>
+
+        <h2>Inbox / Items</h2>
         <table id="items-table">
             <thead>
                 <tr>
@@ -29,7 +54,7 @@
                     <th>Priority</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="items-tbody">
                 {{range .Items}}
                 <tr id="item-{{.ID}}">
                     <td>{{.ID}}</td>
@@ -41,8 +66,8 @@
                 {{end}}
             </tbody>
         </table>
-        {{else}}
-        <p class="empty">No items found.</p>
+        {{if not .Items}}
+        <p id="empty-state" class="empty">No items found.</p>
         {{end}}
     </main>
 </body>

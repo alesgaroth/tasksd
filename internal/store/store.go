@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -70,6 +71,58 @@ func (s *Store) ListItems() ([]core.Item, error) {
 	}
 
 	return items, nil
+}
+
+func (s *Store) NextID(prefix string) (string, error) {
+	items, err := s.ListItems()
+	if err != nil {
+		return "", err
+	}
+	var ids []string
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+	return core.NextID(prefix, ids), nil
+}
+
+func (s *Store) CaptureItem(item core.Item) error {
+	formatted, err := core.FormatItem(item)
+	if err != nil {
+		return err
+	}
+
+	itemsDir := filepath.Join(s.repoDir, "items")
+	if err := os.MkdirAll(itemsDir, 0755); err != nil {
+		return fmt.Errorf("create items dir: %w", err)
+	}
+
+	relPath := filepath.Join("items", item.ID+".md")
+	fullPath := filepath.Join(s.repoDir, relPath)
+	if err := os.WriteFile(fullPath, []byte(formatted), 0644); err != nil {
+		return fmt.Errorf("write item file: %w", err)
+	}
+
+	cmdAdd := exec.Command("git", "add", relPath)
+	cmdAdd.Dir = s.repoDir
+	if out, err := cmdAdd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git add failed: %s: %w", string(out), err)
+	}
+
+	commitMsg := fmt.Sprintf("Capture %s: %s", item.ID, item.Title)
+	cmdCommit := exec.Command("git", "commit", "-m", commitMsg, "--", relPath)
+	cmdCommit.Dir = s.repoDir
+	// Default committer env vars if missing to ensure commits work in headless/test environments
+	cmdCommit.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=tasksd",
+		"GIT_AUTHOR_EMAIL=tasksd@local",
+		"GIT_COMMITTER_NAME=tasksd",
+		"GIT_COMMITTER_EMAIL=tasksd@local",
+	)
+	if out, err := cmdCommit.CombinedOutput(); err != nil {
+		return fmt.Errorf("git commit failed: %s: %w", string(out), err)
+	}
+
+	return nil
 }
 
 func ValidatePath(targetPath string) ([]string, int, error) {
